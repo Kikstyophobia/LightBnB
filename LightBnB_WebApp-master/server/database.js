@@ -9,7 +9,7 @@ const pool = new Pool({
   database: 'lightbnb'
 });
 
-pool.query(`SELECT title FROM properties LIMIT 10;`).then(response => {console.log(response)})
+//pool.query(`SELECT title FROM properties LIMIT 10;`).then(response => {console.log(response)})
 
 /// Users
 
@@ -72,11 +72,11 @@ const addUser =  function(user) {
   INSERT INTO users (name, email, password)
   VALUES ($1, $2, $3) RETURNING *`, [user.name, user.email, user.password]) 
   .then((result) => {
-    //console.log(result.rows[0]);
+    console.log(result.rows[0]);
     return result.rows[0];
   })
   .catch((err) => {
-    //console.log(err);
+    console.log(err);
   });
 
 };
@@ -121,17 +121,59 @@ exports.getAllReservations = getAllReservations;
  * @return {Promise<[{}]>}  A promise to the properties.
  */
  const getAllProperties = (options, limit = 10) => {
+  
+  let queryParams = [];
+  let queryString = `
+  SELECT properties.id, title, cost_per_night, avg(property_reviews.rating) as average_rating
+  FROM properties
+  JOIN property_reviews ON properties.id = property_id
+  WHERE true
+  `;
+
+  if (options.city) {
+    queryParams.push(`%${options.city}%`);
+    queryString += ` AND city ILIKE $${queryParams.length}`
+  }
+
+  if (options.owner_id) {
+    queryParams.push(`${options.owner_id}`);
+    queryString += ` AND owner_id = $${queryParams.length}`
+  }
+
+  if (options.minimum) {
+    queryParams.push(`${options.minimum}`);
+    queryString += ` AND cost_per_night >= $${queryParams.length}`
+  }
+
+  if (options.maximum) {
+    queryParams.push(`${options.maximum}`);
+    queryString += ` AND cost_per_night <= $${queryParams.length}`
+  }
+
+  
+  queryString += `
+  GROUP BY properties.id`
+
+  if (options.rating) {
+      queryParams.push(`${options.rating}`);
+      queryString += ` HAVING avg(property_reviews.rating) >= $${queryParams.length}`
+  }
+
+  queryParams.push(limit);
+
+  queryString +=
+  ` ORDER BY cost_per_night
+  LIMIT $${queryParams.length};
+  `;
+
+
+  console.log(queryString, queryParams);
 
   return pool
-    .query(`SELECT * FROM properties LIMIT $1`, [limit])
+    .query(queryString, queryParams)
     .then((result) => {
-      console.log(result.rows);
-      return result.rows;
-    })
-    .catch((err) => {
-      console.log(err.message);
-    });
-
+      console.log("this is our result", result)
+      result.rows})
 };
 exports.getAllProperties = getAllProperties;
 
